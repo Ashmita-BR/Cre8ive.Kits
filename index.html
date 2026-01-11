@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cre8ive Kits</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body{margin:0;font-family:Arial;background:#f4f4f4}
+.container{max-width:1100px;margin:auto;padding:20px}
+h1{text-align:center}
+.subtitle{text-align:center;color:#666;margin-bottom:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px}
+.card{background:#fff;padding:15px;border-radius:12px;box-shadow:0 4px 10px rgba(0,0,0,.1)}
+button{width:100%;padding:10px;margin-top:10px;border:none;border-radius:8px;background:#000;color:#fff;cursor:pointer}
+input,textarea{width:100%;padding:10px;margin-top:8px;border-radius:6px;border:1px solid #ccc}
+.hidden{display:none}
+.cart-item{font-size:14px;margin:6px 0;display:flex;justify-content:space-between;align-items:center}
+.remove-btn{background:#ff4d4d;color:#fff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer}
+.price-box{background:#f9f9f9;padding:10px;border-radius:8px;margin-top:10px}
+footer{text-align:center;margin-top:40px;font-size:13px;color:#777}
+.success{background:#fff;padding:40px;border-radius:12px;text-align:center}
+.note{font-size:13px;color:#555;text-align:center;margin-top:10px}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<!-- HOME -->
+<div id="homePage">
+<h1>📸 Cre8ive Kits</h1>
+<p class="subtitle">Photo Prints & Mini Photo Gifts</p>
+<div id="products" class="grid"></div>
+</div>
+
+<!-- UPLOAD -->
+<div id="uploadBox" class="hidden card">
+  <h3 id="uploadTitle"></h3>
+  <p id="uploadRule"></p>
+  <input type="file" id="photoInput" multiple accept="image/*">
+  <button onclick="addToCart()">Add to Cart</button>
+</div>
+
+<!-- CART -->
+<div id="cartBox" class="hidden card">
+  <h3>🛒 Your Cart</h3>
+  <div id="cartItems"></div>
+
+  <div class="price-box">
+    Courier Charge: ₹<span id="courierSpan">0</span><br>
+    <strong>Total: ₹<span id="grandTotal">0</span></strong>
+  </div>
+
+  <input id="phoneInput" placeholder="Phone Number">
+  <input id="emailInput" placeholder="Email">
+  <textarea id="addressInput" placeholder="Delivery Address"></textarea>
+
+  <button onclick="payNow()">Pay via UPI</button>
+  <button style="background:green" onclick="confirmPaid()">I Have Paid</button>
+
+  <p class="note">
+    After completing payment in GPay / PhonePe / Paytm, click “I Have Paid”.
+    Orders without payment will NOT be processed.
+  </p>
+</div>
+
+<!-- SUCCESS -->
+<div id="successPage" class="hidden success">
+  <h2>✅ Order Received!</h2>
+  <p>Payment noted successfully.</p>
+  <p>We’ll contact you soon.</p>
+  <button onclick="location.reload()">Back to Home</button>
+</div>
+
+<footer>© 2025 Cre8ive Kits</footer>
+</div>
+
+<script>
+const SHEET_URL = "https://opensheet.elk.sh/1dVBLc5lTz6MGSZyukHjbyRq_psNWob2nfRlADhaa8KQ/Sheet1";
+const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSe6vxWa5JPr3eNthFAgxZsrNFQQXiOUVTzbn74t3uZwviifYA/formResponse";
+const UPI_ID = "revathibalusvi@okhdfcbank";
+
+let selectedProduct=null;
+let cart=[];
+let courierCharge=50;
+let orderId="";
+
+// LOAD PRODUCTS
+fetch(SHEET_URL).then(r=>r.json()).then(data=>{
+  data.forEach(p=>{
+    products.innerHTML+=`
+      <div class="card">
+        <h3>${p.name}</h3>
+        <p>₹${p.price}</p>
+        <button onclick='selectProduct(${JSON.stringify(p)})'>Add</button>
+      </div>`;
+  });
+});
+
+function selectProduct(p){
+  selectedProduct=p;
+  uploadBox.classList.remove("hidden");
+  uploadTitle.innerText=p.name;
+  uploadRule.innerText=
+    p.name.toLowerCase().includes("keychain")
+    ? "Upload exactly 8 photos (₹60 total)"
+    : "Upload photos (price × number of photos)";
+}
+
+function addToCart(){
+  const files=photoInput.files;
+  if(!files.length) return alert("Upload photos");
+
+  const isKeychain=selectedProduct.name.toLowerCase().includes("keychain");
+  if(isKeychain && files.length!==8) return alert("Keychain needs exactly 8 photos");
+
+  const price=isKeychain?60:selectedProduct.price*files.length;
+
+  cart.push({name:selectedProduct.name,photos:files.length,price});
+  photoInput.value="";
+  uploadBox.classList.add("hidden");
+  updateCart();
+}
+
+function removeItem(i){
+  cart.splice(i,1);
+  updateCart();
+}
+
+function updateCart(){
+  cartBox.classList.remove("hidden");
+  cartItems.innerHTML="";
+  let subtotal=0;
+
+  cart.forEach((item,i)=>{
+    subtotal+=item.price;
+    cartItems.innerHTML+=`
+      <div class="cart-item">
+        ${item.name} – ${item.photos} photos – ₹${item.price}
+        <button class="remove-btn" onclick="removeItem(${i})">✕</button>
+      </div>`;
+  });
+
+  courierSpan.innerText=courierCharge;
+  grandTotal.innerText=subtotal+courierCharge;
+}
+
+function payNow(){
+  if(cart.length===0) return alert("Cart is empty");
+  if(!phoneInput.value||!emailInput.value||!addressInput.value)
+    return alert("Fill all details");
+
+  orderId="CK-"+Date.now();
+  const total=cart.reduce((s,i)=>s+i.price,0)+courierCharge;
+
+  window.location.href=
+    `upi://pay?pa=${UPI_ID}&pn=Cre8iveKits&am=${total}&cu=INR&tn=${orderId}`;
+}
+
+function confirmPaid(){
+  if(!orderId) return alert("Please complete payment first");
+
+  const total=cart.reduce((s,i)=>s+i.price,0)+courierCharge;
+
+  const d=new URLSearchParams();
+  d.append("entry.519351504",orderId);
+  d.append("entry.1402544136",cart.map(i=>i.name).join(", "));
+  d.append("entry.628928894",total);
+  d.append("entry.730299059",emailInput.value);
+  d.append("entry.2042615816",phoneInput.value);
+  d.append("entry.1218885446",addressInput.value);
+
+  fetch(FORM_URL,{method:"POST",mode:"no-cors",body:d});
+
+  homePage.classList.add("hidden");
+  cartBox.classList.add("hidden");
+  successPage.classList.remove("hidden");
+}
+</script>
+</body>
+</html>
